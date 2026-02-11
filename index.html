@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Paisajes Sonoros - Laboratorio Educativo</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,7 +14,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #020617; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #020617; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; touch-action: none; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes ping-slow {
@@ -33,8 +33,9 @@
 
         /**
          * Componente LucideIcon Robusto
+         * Acepta clases de Tailwind para el tamaño responsivo.
          */
-        const LucideIcon = ({ name, size = 24, className = "" }) => {
+        const LucideIcon = ({ name, size, className = "" }) => {
             const iconRef = useRef(null);
 
             useEffect(() => {
@@ -44,8 +45,11 @@
                     const iconDef = window.lucide.icons[name];
                     const svg = window.lucide.createElement(iconDef);
                     
-                    svg.setAttribute('width', size);
-                    svg.setAttribute('height', size);
+                    // Si no se pasa size explícito, dejamos que CSS/Tailwind controle el tamaño
+                    if (size) {
+                        svg.setAttribute('width', size);
+                        svg.setAttribute('height', size);
+                    }
                     svg.setAttribute('stroke-width', 2);
                     
                     if (className) {
@@ -68,7 +72,8 @@
                 }
             }, [name, size, className]);
 
-            return <span ref={iconRef} style={{ display: 'inline-flex', width: size, height: size, alignItems: 'center', justifyContent: 'center' }}></span>;
+            // Span contenedor flexible
+            return <span ref={iconRef} className={`inline-flex items-center justify-center ${className}`}></span>;
         };
 
         const App = () => {
@@ -125,24 +130,57 @@
                 });
             }, [isPlaying, view]);
 
+            // LÓGICA DE ARRASTRE MEJORADA (GLOBAL WINDOW LISTENERS)
             const handleMove = (e) => {
                 if (!draggingId || !stageRef.current) return;
+                
+                // Prevenir comportamiento por defecto (scroll) en móviles
                 if (e.cancelable) e.preventDefault();
+                
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
                 const rect = stageRef.current.getBoundingClientRect();
-                const xPercent = ((clientX - rect.left) / rect.width) * 100;
-                const yPercent = ((clientY - rect.top) / rect.height) * 100;
+                
+                // Calcular porcentaje relativo al escenario
+                let xPercent = ((clientX - rect.left) / rect.width) * 100;
+                let yPercent = ((clientY - rect.top) / rect.height) * 100;
+                
+                // Límites de seguridad para que no se salga de la pantalla
+                xPercent = Math.max(0, Math.min(100, xPercent));
+                yPercent = Math.max(0, Math.min(100, yPercent));
+
                 setPlacedSounds(prev => prev.map(s => 
                     s.id === draggingId 
-                        ? { ...s, x: Math.max(5, Math.min(95, xPercent)), y: Math.max(15, Math.min(90, yPercent)) } 
+                        ? { ...s, x: xPercent, y: yPercent } 
                         : s
                 ));
             };
 
+            const stopDragging = () => {
+                setDraggingId(null);
+            };
+
+            // Conectar eventos globales cuando se está arrastrando
+            useEffect(() => {
+                if (draggingId) {
+                    window.addEventListener('mousemove', handleMove);
+                    window.addEventListener('mouseup', stopDragging);
+                    window.addEventListener('touchmove', handleMove, { passive: false });
+                    window.addEventListener('touchend', stopDragging);
+                }
+                
+                return () => {
+                    window.removeEventListener('mousemove', handleMove);
+                    window.removeEventListener('mouseup', stopDragging);
+                    window.removeEventListener('touchmove', handleMove);
+                    window.removeEventListener('touchend', stopDragging);
+                };
+            }, [draggingId]);
+
             const addSoundToStage = (sound) => {
-                const randomX = 15 + Math.random() * 70;
-                const randomY = 25 + Math.random() * 50;
+                const randomX = 20 + Math.random() * 60;
+                const randomY = 30 + Math.random() * 40;
                 const newInstance = { ...sound, id: Math.random().toString(36).substr(2, 9), x: randomX, y: randomY };
                 setPlacedSounds(prev => [...prev, newInstance]);
                 startAudio(newInstance);
@@ -261,7 +299,7 @@
                         </div>
                     </div>
                     
-                    <div className="bg-slate-900/50 border border-indigo-500/20 p-8 rounded-[2rem] flex items-center justify-between gap-6 mt-10 max-w-6xl mx-auto">
+                    <div className="bg-slate-900/50 border border-indigo-500/20 p-8 rounded-[2rem] flex items-center justify-between gap-6 mt-10 max-w-6xl mx-auto mb-24">
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-indigo-500/20 rounded-full animate-bounce"><LucideIcon name="Gamepad2" size={28} className="text-indigo-400" /></div>
                             <p className="text-sm md:text-base text-slate-400 font-medium italic">¿Listo para aplicar lo que has aprendido?</p>
@@ -275,19 +313,19 @@
 
             const SectionJugar = () => (
                 <div className="flex-grow flex flex-col relative overflow-hidden h-full">
-                    <div ref={stageRef} onMouseMove={handleMove} onMouseUp={() => setDraggingId(null)} onMouseLeave={() => setDraggingId(null)} onTouchMove={handleMove} onTouchEnd={() => setDraggingId(null)} className="relative flex-grow w-full overflow-hidden bg-gradient-to-b from-indigo-900 via-slate-900 to-slate-950 touch-none">
+                    <div ref={stageRef} className="relative flex-grow w-full overflow-hidden bg-gradient-to-b from-indigo-900 via-slate-900 to-slate-950 touch-none">
                         
-                        {/* Controles Playback */}
-                        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900/80 backdrop-blur-md p-3 rounded-3xl border border-white/10 shadow-xl">
-                            <button onClick={() => setIsPlaying(!isPlaying)} className={`p-4 rounded-2xl transition-all ${isPlaying ? 'bg-amber-500 shadow-lg shadow-amber-500/20 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                                <LucideIcon name={isPlaying ? 'Pause' : 'Play'} size={32} />
+                        {/* Controles Playback RESPONSIVOS: Más pequeños en móvil, grandes en escritorio */}
+                        <div className="absolute top-2 md:top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 md:gap-3 bg-slate-900/80 backdrop-blur-md p-2 md:p-3 rounded-2xl md:rounded-3xl border border-white/10 shadow-xl transition-all">
+                            <button onClick={() => setIsPlaying(!isPlaying)} className={`p-2 md:p-4 rounded-xl md:rounded-2xl transition-all ${isPlaying ? 'bg-amber-500 shadow-lg shadow-amber-500/20 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                                <LucideIcon name={isPlaying ? 'Pause' : 'Play'} className="w-5 h-5 md:w-8 md:h-8" />
                             </button>
-                            <button onClick={() => { setIsPlaying(false); }} className="p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-white transition-colors">
-                                <LucideIcon name="Square" size={28} />
+                            <button onClick={() => { setIsPlaying(false); }} className="p-2 md:p-4 bg-slate-800 rounded-xl md:rounded-2xl text-slate-400 hover:text-white transition-colors">
+                                <LucideIcon name="Square" className="w-5 h-5 md:w-7 md:h-7" />
                             </button>
-                            <div className="w-px h-10 bg-white/10 mx-2"></div>
-                            <button onClick={clearAll} className="p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-colors">
-                                <LucideIcon name="Trash2" size={28} />
+                            <div className="w-px h-6 md:h-10 bg-white/10 mx-1 md:mx-2"></div>
+                            <button onClick={clearAll} className="p-2 md:p-4 bg-slate-800 rounded-xl md:rounded-2xl text-slate-400 hover:text-red-400 transition-colors">
+                                <LucideIcon name="Trash2" className="w-5 h-5 md:w-7 md:h-7" />
                             </button>
                         </div>
 
@@ -304,24 +342,25 @@
                                         onMouseDown={(e) => e.stopPropagation()} 
                                         onTouchStart={(e) => e.stopPropagation()}
                                         onClick={(e) => { e.stopPropagation(); removeSound(sound.id); }} 
-                                        className="delete-btn absolute -top-5 -right-5 bg-red-500 text-white rounded-full p-3 z-50 shadow-lg border-4 border-slate-900 hover:scale-110 active:scale-90 transition-transform"
+                                        className="delete-btn absolute -top-4 -right-4 md:-top-5 md:-right-5 bg-red-500 text-white rounded-full p-2 md:p-3 z-50 shadow-lg border-2 md:border-4 border-slate-900 hover:scale-110 active:scale-90 transition-transform"
                                     >
-                                        <LucideIcon name="X" size={16} className="stroke-white" />
+                                        <LucideIcon name="X" className="w-3 h-3 md:w-4 md:h-4 stroke-white" />
                                     </button>
                                     
                                     {/* Indicador de volumen */}
                                     {isPlaying && (
-                                        <div className="absolute top-6 -right-5 z-40 bg-white/20 backdrop-blur-sm rounded-full p-2 animate-pulse shadow-inner">
-                                            <LucideIcon name="Volume2" size={16} className="text-white" />
+                                        <div className="absolute top-4 -right-4 md:top-6 md:-right-5 z-40 bg-white/20 backdrop-blur-sm rounded-full p-1 md:p-2 animate-pulse shadow-inner">
+                                            <LucideIcon name="Volume2" className="w-3 h-3 md:w-4 md:h-4 text-white" />
                                         </div>
                                     )}
                                     
-                                    <div className={`w-20 h-20 sm:w-24 sm:h-24 ${sound.color} rounded-3xl flex items-center justify-center shadow-2xl border-4 border-white/30 cursor-grab active:cursor-grabbing text-white`}>
-                                        <LucideIcon name={sound.icon} size={40} />
+                                    {/* Icono Principal: Tamaño responsivo */}
+                                    <div className={`w-16 h-16 md:w-24 md:h-24 ${sound.color} rounded-2xl md:rounded-3xl flex items-center justify-center shadow-2xl border-2 md:border-4 border-white/30 cursor-grab active:cursor-grabbing text-white`}>
+                                        <LucideIcon name={sound.icon} className="w-8 h-8 md:w-10 md:h-10" />
                                     </div>
                                     
-                                    <div className="mt-3 flex flex-col items-center">
-                                        <p className="text-xs text-center font-bold uppercase tracking-wider bg-black/50 backdrop-blur-md rounded-full px-4 py-1 border border-white/10 text-white whitespace-nowrap shadow-md">
+                                    <div className="mt-2 md:mt-3 flex flex-col items-center">
+                                        <p className="text-[8px] md:text-xs text-center font-bold uppercase tracking-wider bg-black/50 backdrop-blur-md rounded-full px-2 md:px-4 py-0.5 md:py-1 border border-white/10 text-white whitespace-nowrap shadow-md">
                                             {sound.name}
                                         </p>
                                     </div>
@@ -331,40 +370,40 @@
 
                         {placedSounds.length === 0 && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-white/10 pointer-events-none px-6">
-                                <LucideIcon name="Leaf" size={80} className="mb-6 animate-pulse" />
-                                <p className="text-lg md:text-xl font-bold tracking-widest uppercase">¡Arrastra sonidos para empezar!</p>
+                                <LucideIcon name="Leaf" className="w-16 h-16 md:w-20 md:h-20 mb-4 md:mb-6 animate-pulse" />
+                                <p className="text-sm md:text-xl font-bold tracking-widest uppercase text-center">¡Arrastra sonidos aquí!</p>
                             </div>
                         )}
                     </div>
 
-                    {/* Biblioteca */}
-                    <div className="h-72 sm:h-80 w-full bg-slate-900 border-t border-white/5 flex flex-col z-40">
-                        <div className="flex px-6 gap-3 -mt-7">
+                    {/* Biblioteca RESPONSIVA: Menor altura en móvil */}
+                    <div className="h-48 md:h-80 w-full bg-slate-900 border-t border-white/5 flex flex-col z-40 shrink-0">
+                        <div className="flex px-4 md:px-6 gap-2 md:gap-3 -mt-5 md:-mt-7">
                             {Object.keys(soundLibrary).map((tab) => (
-                                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-2xl font-bold uppercase text-xs sm:text-sm transition-all ${activeTab === tab ? 'bg-slate-900 text-white border-t-4 border-indigo-500 shadow-xl' : 'bg-slate-800 text-slate-500'}`}>
-                                    <LucideIcon name={tab === 'naturaleza' ? 'Leaf' : 'Building2'} size={20} />
+                                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 flex items-center justify-center gap-2 md:gap-3 py-3 md:py-5 rounded-xl md:rounded-2xl font-bold uppercase text-[10px] md:text-sm transition-all ${activeTab === tab ? 'bg-slate-900 text-white border-t-2 md:border-t-4 border-indigo-500 shadow-xl' : 'bg-slate-800 text-slate-500'}`}>
+                                    <LucideIcon name={tab === 'naturaleza' ? 'Leaf' : 'Building2'} className="w-4 h-4 md:w-5 md:h-5" />
                                     <span className="capitalize ml-1">{tab}</span>
                                 </button>
                             ))}
                         </div>
                         
-                        <div className="flex-grow overflow-x-auto px-8 flex items-center scrollbar-hide">
-                            <div className="flex gap-8 min-w-max h-full items-center">
+                        <div className="flex-grow overflow-x-auto px-4 md:px-8 flex items-center scrollbar-hide">
+                            <div className="flex gap-4 md:gap-8 min-w-max h-full items-center">
                                 {soundLibrary[activeTab].map((sound) => (
-                                    <button key={sound.id} onClick={() => addSoundToStage(sound)} className="flex flex-col items-center gap-4 active:scale-95 transition-transform group">
-                                        <div className={`w-24 h-24 sm:w-28 sm:h-28 ${sound.color} rounded-[2rem] flex items-center justify-center shadow-lg border-t-2 border-white/20 text-white group-hover:scale-105 transition-transform`}>
-                                            <LucideIcon name={sound.icon} size={44} />
+                                    <button key={sound.id} onClick={() => addSoundToStage(sound)} className="flex flex-col items-center gap-2 md:gap-4 active:scale-95 transition-transform group">
+                                        <div className={`w-16 h-16 md:w-28 md:h-28 ${sound.color} rounded-2xl md:rounded-[2rem] flex items-center justify-center shadow-lg border-t md:border-t-2 border-white/20 text-white group-hover:scale-105 transition-transform`}>
+                                            <LucideIcon name={sound.icon} className="w-8 h-8 md:w-11 md:h-11" />
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{sound.name}</span>
+                                        <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">{sound.name}</span>
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        <div className="bg-slate-950/80 py-3 px-8 flex justify-between items-center border-t border-white/5">
-                            <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold font-bold">Banco de sonidos:</p>
-                            <a href="https://procomun.intef.es/" target="_blank" className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 font-bold">
-                                PROCOMÚN - INTEF <LucideIcon name="ExternalLink" size={12} />
+                        <div className="bg-slate-950/80 py-2 md:py-3 px-4 md:px-8 flex justify-between items-center border-t border-white/5">
+                            <p className="text-[8px] md:text-xs text-slate-500 uppercase tracking-widest font-semibold font-bold">Banco de sonidos:</p>
+                            <a href="https://procomun.intef.es/" target="_blank" className="flex items-center gap-1 md:gap-2 text-[8px] md:text-xs text-indigo-400 hover:text-indigo-300 font-bold">
+                                PROCOMÚN - INTEF <LucideIcon name="ExternalLink" className="w-3 h-3 md:w-3 md:h-3" />
                             </a>
                         </div>
                     </div>
@@ -373,12 +412,12 @@
 
             return (
                 <div className="flex flex-col h-screen w-full bg-slate-950 overflow-hidden text-white select-none touch-none">
-                    <nav className="bg-slate-900/50 backdrop-blur-md border-b border-white/5 p-3 flex items-center justify-center gap-2 shrink-0">
-                        <button onClick={() => setView('aprender')} className={`flex-1 max-w-[220px] flex items-center justify-center gap-3 py-4 rounded-2xl font-bold uppercase text-sm md:text-base transition-all ${view === 'aprender' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
-                            <LucideIcon name="BookOpen" size={20} /><span>Aprender</span>
+                    <nav className="bg-slate-900/50 backdrop-blur-md border-b border-white/5 p-2 md:p-3 flex items-center justify-center gap-2 shrink-0">
+                        <button onClick={() => setView('aprender')} className={`flex-1 max-w-[150px] md:max-w-[220px] flex items-center justify-center gap-2 md:gap-3 py-3 md:py-4 rounded-xl md:rounded-2xl font-bold uppercase text-xs md:text-base transition-all ${view === 'aprender' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
+                            <LucideIcon name="BookOpen" className="w-4 h-4 md:w-5 md:h-5" /><span>Aprender</span>
                         </button>
-                        <button onClick={() => setView('jugar')} className={`flex-1 max-w-[220px] flex items-center justify-center gap-3 py-4 rounded-2xl font-bold uppercase text-sm md:text-base transition-all ${view === 'jugar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
-                            <LucideIcon name="Gamepad2" size={20} /><span>Jugar</span>
+                        <button onClick={() => setView('jugar')} className={`flex-1 max-w-[150px] md:max-w-[220px] flex items-center justify-center gap-2 md:gap-3 py-3 md:py-4 rounded-xl md:rounded-2xl font-bold uppercase text-xs md:text-base transition-all ${view === 'jugar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
+                            <LucideIcon name="Gamepad2" className="w-4 h-4 md:w-5 md:h-5" /><span>Jugar</span>
                         </button>
                     </nav>
                     {view === 'aprender' ? <SectionAprender /> : <SectionJugar />}
